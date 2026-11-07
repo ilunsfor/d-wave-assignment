@@ -33,7 +33,10 @@ LARGE_TOP_N = 12
 # A single review unit above this many characters is skipped and listed -- never truncated.
 UNIT_MAX_CHARS = 40_000
 
-# --- ranking weights (additive score; higher = reviewed first) ----------------------------
+# --- ranking weights -----------------------------------------------------------------------
+# Files are ordered by kind first (the KIND_WEIGHT order), then by the additive score below
+# within a kind. Bonuses therefore reorder files of the same kind and can never lift a test or
+# docs file above a source file.
 KIND_WEIGHT = {"source": 50, "test": 20, "docs": 10, "config": 5}
 HOT_PATH_PREFIXES = (
     "django/db/backends/",

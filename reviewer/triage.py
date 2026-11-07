@@ -120,7 +120,13 @@ def totals(files: list[FileStat]) -> dict[str, int]:
 # --- ranking ---------------------------------------------------------------------------------
 
 def score(f: FileStat) -> float:
-    """Review-worthiness. Kind dominates; hot paths and new files add; size only breaks ties."""
+    """Review-worthiness within a kind: hot paths and new files add; size only breaks ties.
+
+    The score is additive for readability in the report, but rank() orders by kind *first*, so
+    no combination of bonuses lets a test or docs file outrank a source file. (The first cut
+    relied on the weights alone; a 412-line new test file then scored 55 and beat 50-point
+    source edits. The ranking test caught it.)
+    """
     s = float(config.KIND_WEIGHT[f.kind])
     if f.path.startswith(config.HOT_PATH_PREFIXES):
         s += config.HOT_PATH_BONUS
@@ -133,10 +139,13 @@ def score(f: FileStat) -> float:
 
 
 def rank(files: list[FileStat]) -> list[FileStat]:
-    """Score every file in place and return them highest-first (ties: more changed lines, then path)."""
+    """Score every file in place and return them highest-first.
+
+    Order: kind (source > test > docs > config), then score, then changed lines, then path.
+    """
     for f in files:
         f.score = score(f)
-    return sorted(files, key=lambda f: (-f.score, -f.changed, f.path))
+    return sorted(files, key=lambda f: (-config.KIND_WEIGHT[f.kind], -f.score, -f.changed, f.path))
 
 
 # --- the one judgement call ------------------------------------------------------------------
