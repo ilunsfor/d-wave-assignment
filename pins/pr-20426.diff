@@ -1,0 +1,31 @@
+diff --git a/django/forms/forms.py b/django/forms/forms.py
+index 760ba7b76792..ce64f6286e57 100644
+--- a/django/forms/forms.py
++++ b/django/forms/forms.py
+@@ -288,7 +288,7 @@ def add_error(self, field, error):
+             if field is not None:
+                 raise TypeError(
+                     "The argument `field` must be `None` when the `error` "
+-                    "argument contains errors for multiple fields."
++                    "argument is a dictionary."
+                 )
+             else:
+                 error = error.error_dict
+diff --git a/tests/forms_tests/tests/test_forms.py b/tests/forms_tests/tests/test_forms.py
+index 8cc1fecf0a17..7f698ad706cd 100644
+--- a/tests/forms_tests/tests/test_forms.py
++++ b/tests/forms_tests/tests/test_forms.py
+@@ -1660,6 +1660,13 @@ def clean(self):
+         with self.assertRaisesMessage(ValueError, "has no field named"):
+             f.add_error("missing_field", "Some error.")
+ 
++        with self.assertRaisesMessage(
++            TypeError,
++            "The argument `field` must be `None` when the `error` argument is a "
++            "dictionary.",
++        ):
++            f.add_error("password1", ValidationError({"password1": "Some error."}))
++
+     def test_update_error_dict(self):
+         class CodeForm(Form):
+             code = CharField(max_length=10)

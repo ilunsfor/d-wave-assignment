@@ -47,7 +47,10 @@ SIZE_DIVISOR = 20  # changed_lines / SIZE_DIVISOR ...
 SIZE_BONUS_CAP = 20  # ... capped here, so size is a tiebreak and never outranks kind
 
 # --- file classification -------------------------------------------------------------------
-TEST_PATH_MARKERS = ("tests/", "/tests/", "/test_", "_tests.py", "/testing/")
+TEST_PATH_MARKERS = ("/tests/", "/testing/")  # anywhere in the path; a leading "tests/" also counts
+TEST_BASENAMES = ("tests.py", "runtests.py")
+TEST_BASENAME_PREFIXES = ("test_",)
+TEST_BASENAME_SUFFIXES = ("_tests.py", "_test.py")
 DOCS_PATH_PREFIXES = ("docs/",)
 DOCS_EXTENSIONS = (".txt", ".rst", ".md")
 CONFIG_BASENAMES = (

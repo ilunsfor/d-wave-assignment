@@ -1,0 +1,139 @@
+diff --git a/django/db/models/base.py b/django/db/models/base.py
+index 518cfc44a252..358a7446753c 100644
+--- a/django/db/models/base.py
++++ b/django/db/models/base.py
+@@ -1357,7 +1357,7 @@ def _get_field_expression_map(self, meta, exclude=None):
+         meta = meta or self._meta
+         field_map = {}
+         generated_fields = []
+-        for field in meta.local_concrete_fields:
++        for field in meta.local_fields:
+             if field.name in exclude:
+                 continue
+             if field.generated:
+@@ -1368,7 +1368,19 @@ def _get_field_expression_map(self, meta, exclude=None):
+                     continue
+                 generated_fields.append(field)
+                 continue
+-            value = getattr(self, field.attname)
++            if (
++                isinstance(field.remote_field, ForeignObjectRel)
++                and field not in meta.local_concrete_fields
++            ):
++                value = tuple(
++                    getattr(self, from_field) for from_field in field.from_fields
++                )
++                if len(value) == 1:
++                    value = value[0]
++            elif field.concrete:
++                value = getattr(self, field.attname)
++            else:
++                continue
+             if not value or not hasattr(value, "resolve_expression"):
+                 value = Value(value, field)
+             field_map[field.name] = value
+diff --git a/tests/foreign_object/models/__init__.py b/tests/foreign_object/models/__init__.py
+index 69778d3dddd0..d2ddc6864672 100644
+--- a/tests/foreign_object/models/__init__.py
++++ b/tests/foreign_object/models/__init__.py
+@@ -1,5 +1,5 @@
+ from .article import Article, ArticleIdea, ArticleTag, ArticleTranslation, NewsArticle
+-from .customers import Address, Contact, Customer
++from .customers import Address, Contact, Customer, CustomerTab
+ from .empty_join import SlugPage
+ from .person import Country, Friendship, Group, Membership, Person
+ 
+@@ -12,6 +12,7 @@
+     "Contact",
+     "Country",
+     "Customer",
++    "CustomerTab",
+     "Friendship",
+     "Group",
+     "Membership",
+diff --git a/tests/foreign_object/models/customers.py b/tests/foreign_object/models/customers.py
+index 91ac0915242b..085b7272e98d 100644
+--- a/tests/foreign_object/models/customers.py
++++ b/tests/foreign_object/models/customers.py
+@@ -39,3 +39,22 @@ class Contact(models.Model):
+         to_fields=["customer_id", "company"],
+         from_fields=["customer_code", "company_code"],
+     )
++
++
++class CustomerTab(models.Model):
++    customer_id = models.IntegerField()
++    customer = models.ForeignObject(
++        Customer,
++        from_fields=["customer_id"],
++        to_fields=["id"],
++        on_delete=models.CASCADE,
++    )
++
++    class Meta:
++        required_db_features = {"supports_table_check_constraints"}
++        constraints = [
++            models.CheckConstraint(
++                condition=models.Q(customer__lt=1000),
++                name="customer_id_limit",
++            ),
++        ]
+diff --git a/tests/foreign_object/tests.py b/tests/foreign_object/tests.py
+index b4072d500d13..09fb47e771dc 100644
+--- a/tests/foreign_object/tests.py
++++ b/tests/foreign_object/tests.py
+@@ -3,10 +3,10 @@
+ import pickle
+ from operator import attrgetter
+ 
+-from django.core.exceptions import FieldError
++from django.core.exceptions import FieldError, ValidationError
+ from django.db import connection, models
+ from django.test import SimpleTestCase, TestCase, skipUnlessDBFeature
+-from django.test.utils import isolate_apps
++from django.test.utils import CaptureQueriesContext, isolate_apps
+ from django.utils import translation
+ 
+ from .models import (
+@@ -15,6 +15,7 @@
+     ArticleTag,
+     ArticleTranslation,
+     Country,
++    CustomerTab,
+     Friendship,
+     Group,
+     Membership,
+@@ -767,3 +768,33 @@ def test_pickling_foreignobject(self):
+         foreign_object_restored = pickle.loads(pickle.dumps(foreign_object))
+         self.assertIn("path_infos", foreign_object_restored.__dict__)
+         self.assertIn("reverse_path_infos", foreign_object_restored.__dict__)
++
++
++class ForeignObjectModelValidationTests(TestCase):
++    @skipUnlessDBFeature("supports_table_check_constraints")
++    def test_validate_constraints_with_foreign_object(self):
++        customer_tab = CustomerTab(customer_id=1500)
++        with self.assertRaisesMessage(ValidationError, "customer_id_limit"):
++            customer_tab.validate_constraints()
++
++    @skipUnlessDBFeature("supports_table_check_constraints")
++    def test_validate_constraints_success_case_single_query(self):
++        customer_tab = CustomerTab(customer_id=500)
++        with CaptureQueriesContext(connection) as ctx:
++            customer_tab.validate_constraints()
++        select_queries = [
++            query["sql"]
++            for query in ctx.captured_queries
++            if "select" in query["sql"].lower()
++        ]
++        self.assertEqual(len(select_queries), 1)
++
++    @skipUnlessDBFeature("supports_table_check_constraints")
++    def test_validate_constraints_excluding_foreign_object(self):
++        customer_tab = CustomerTab(customer_id=150)
++        customer_tab.validate_constraints(exclude={"customer"})
++
++    @skipUnlessDBFeature("supports_table_check_constraints")
++    def test_validate_constraints_excluding_foreign_object_member(self):
++        customer_tab = CustomerTab(customer_id=150)
++        customer_tab.validate_constraints(exclude={"customer_id"})
