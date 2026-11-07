@@ -1,0 +1,2 @@
+openai>=3,<4
+unidiff>=0.7
