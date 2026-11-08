@@ -77,6 +77,27 @@ class GroundTests(unittest.TestCase):
         kept, dropped = self.ground(finding('"Argument is a dictionary."'))
         self.assertEqual((len(kept), dropped), (0, 1))
 
+    def test_quote_of_new_code_across_the_changed_line_is_grounded(self):
+        # Context line followed directly by the added line: contiguous in the after-image, but
+        # the removed line sits between them in the raw hunk. The first live run on #20426
+        # dropped exactly this (correct) quote as ungrounded.
+        snippet = ('                    "The argument `field` must be `None` when the `error` "\n'
+                   '                    "argument is a dictionary."')
+        kept, dropped = self.ground(finding(snippet))
+        self.assertEqual((len(kept), dropped), (1, 0))
+
+    def test_quote_of_old_code_across_the_changed_line_is_grounded(self):
+        snippet = ('                    "The argument `field` must be `None` when the `error` "\n'
+                   '                    "argument contains errors for multiple fields."')
+        kept, dropped = self.ground(finding(snippet))
+        self.assertEqual((len(kept), dropped), (1, 0))
+
+    def test_removed_line_followed_by_added_line_is_a_quote_of_the_diff_not_the_code(self):
+        snippet = ('                    "argument contains errors for multiple fields."\n'
+                   '                    "argument is a dictionary."')
+        kept, dropped = self.ground(finding(snippet))
+        self.assertEqual((len(kept), dropped), (0, 1))
+
 
 class VerdictPolicyTests(unittest.TestCase):
     def test_supported_kept_unsupported_dropped(self):

@@ -119,6 +119,9 @@ def run_review(label: str, files: list, plan: route.Plan, client: Client, ledger
         verifier_failed_files=verified.failed_files,
         review_failed_units=len({s.path for s in drafted.failed}),
         findings=[{**f.public(), "verdict": f.verdict, "verdict_reason": f.verdict_reason} for f in emitted],
+        # Every dropped finding, with why: the funnel counts above are auditable only if the
+        # sidecar shows what each stage threw away.
+        findings_dropped=_dropped(drafted.findings, kept, survivors, emitted),
     )
     if plan.units and len(drafted.failed) == len(plan.reviewed_paths):
         ledger.note("review: every unit failed; the review below contains no findings because nothing was reviewed")
@@ -126,3 +129,20 @@ def run_review(label: str, files: list, plan: route.Plan, client: Client, ledger
     not_reviewed = plan.skipped + drafted.failed
     with ledger.phase("synth"):
         return synth.synthesize(label, plan, intent, emitted, not_reviewed, client, ledger)
+
+
+def _dropped(drafted, after_suppress, after_verify, after_ground) -> list[dict]:
+    """Attribute each non-emitted finding to the stage that dropped it."""
+    stages = (
+        ("suppressed", drafted, after_suppress),
+        ("verifier-rejected", after_suppress, after_verify),
+        ("ungrounded", after_verify, after_ground),
+    )
+    out = []
+    for reason, before, after in stages:
+        survivors = {id(f) for f in after}
+        for f in before:
+            if id(f) not in survivors:
+                out.append({**f.public(), "dropped": reason, "verdict": f.verdict,
+                            "verdict_reason": f.verdict_reason})
+    return out

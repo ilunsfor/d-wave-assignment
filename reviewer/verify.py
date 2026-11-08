@@ -12,7 +12,7 @@ from dataclasses import dataclass, field
 from . import config
 from .llm import Client, LLMError, data_block
 from .schema import VERIFY_RESPONSE_SCHEMA, FileStat, Finding, SchemaError, parse_verdicts
-from .triage import hunk_code_text
+from .triage import hunk_images
 
 VERIFY_SYSTEM = """You check code review findings against the diff they cite. You see the finding's claim and the cited file's hunks, nothing else.
 
@@ -94,16 +94,20 @@ def apply_verdicts(findings: list[Finding]) -> tuple[list[Finding], int]:
 
 
 def ground(findings: list[Finding], files: dict[str, FileStat]) -> tuple[list[Finding], int]:
-    """Deterministic: the snippet must appear verbatim in the cited file's prefix-stripped hunks.
+    """Deterministic: the snippet must appear verbatim in the cited file's before- or after-image.
 
     Exact substring match. No whitespace normalisation, no case folding, no fuzzy matching: a
-    snippet that is "almost" in the diff is a snippet that is not in the diff.
+    snippet that is "almost" in the diff is a snippet that is not in the diff. The images, not
+    the interleaved hunk text, are what the code actually looks like: a quote of the new code
+    that spans a changed line is contiguous in the after-image but has the removed line sitting
+    inside it in the raw hunk. (Found by the first live run, which dropped a correct quote.)
     Returns (grounded findings, ungrounded count) and sets `grounded` on every finding.
     """
-    code_by_file = {path: hunk_code_text(stat.hunk_text) for path, stat in files.items()}
+    images = {path: hunk_images(stat.hunk_text) for path, stat in files.items()}
     kept: list[Finding] = []
     for f in findings:
-        f.grounded = f.snippet in code_by_file.get(f.file, "")
+        before, after = images.get(f.file, ("", ""))
+        f.grounded = bool(f.snippet) and (f.snippet in before or f.snippet in after)
         if f.grounded:
             kept.append(f)
     return kept, len(findings) - len(kept)

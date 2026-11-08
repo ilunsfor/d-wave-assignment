@@ -70,7 +70,7 @@ fetch -> triage -> route -+-> SMALL   whole diff, one call      -+
 | review | structured findings per unit, bounded fan-out, main thread is the only writer | claude-opus-5-5, effort high |
 | suppress | drop nits before anything pays for them | none |
 | verify | per file: findings' claims plus the file's hunks, **not** the reviewer's rationale; supported / unsupported / uncertain | claude-opus-5-5, effort high |
-| ground | exact substring check of each snippet against the cited file's hunks | none |
+| ground | exact substring check of each snippet against the cited file's before- or after-image | none |
 | synth | one call composes the review; header, Not-reviewed and footer rendered by code | claude-opus-5-5, effort medium |
 
 Every constant lives in `reviewer/config.py`. Diff content enters every prompt through one
@@ -118,7 +118,8 @@ verifier-rejected / ungrounded / emitted; groundedness; and the verifier rejecti
 
 **The quality signal is citation groundedness.** Every finding carries a file, a line range and a
 verbatim snippet, and a deterministic check asserts the snippet appears character-for-character
-in that file's hunks. No whitespace normalisation, no fuzzy matching. It measures the failure that
+in the before-image or the after-image of that file's hunks (context plus removed lines, or
+context plus added lines). No whitespace normalisation, no fuzzy matching. It measures the failure that
 actually gets review bots muted (citing code that is not there), it costs nothing per run so it
 can gate CI on every prompt and model change, and it is aimed at exactly what a model does under
 pressure to produce findings. The verifier rejection rate is the secondary signal: judged rather
@@ -193,6 +194,17 @@ AI got wrong was kept as it happened; the entries below are from that log, not r
   seven stages without questioning it. The assignment says only "use your own LLM API key". When
   I asked, the provider was swapped to the Claude API before any live run: one module, the price
   table, and this document changed; nothing in review, verify, synth or the tests did.
+- The first live run dropped a correct finding as ungrounded. The groundedness check matched
+  snippets against the hunk text with context, removed and added lines interleaved; the model
+  quoted two lines of the *new* code, which are adjacent in the file but have the removed line
+  between them in the hunk. Design error, not a model error: "the diff as text" is not "the
+  code". Fixed to check the before- and after-images; three tests added for the case. The
+  sidecar now lists every dropped finding with the stage that dropped it, which is how this was
+  diagnosed in one run instead of guessing.
+- On the same run the triage model (Haiku) asserted that two string fragments were concatenated
+  without a space, misreading a removed line and an added line as consecutive. The reviewer was
+  handed that summary and did not take the bait. Noted as the kind of error a cheap summariser
+  makes on diffs, and as a reason the summary is labelled as the triage model's, not the agent's.
 
 ## What two more days would buy
 

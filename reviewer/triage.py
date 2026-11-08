@@ -83,12 +83,16 @@ def classify(path: str) -> str:
     return "source"
 
 
-def hunk_code_text(hunk_text: str) -> str:
+def hunk_code_text(hunk_text: str, side: str = "both") -> str:
     """The code content of a file's hunks: hunk lines with the +/-/space prefix removed.
 
     Headers (`diff --git`, `index`, `---`, `+++`, `@@`) and `\\ No newline` markers are dropped.
-    This is the text a snippet must appear in verbatim to count as grounded.
+    `side` selects which lines survive: "both" interleaves context, removed and added lines (the
+    diff read as code); "before" is the pre-change image (context + removed); "after" is the
+    post-change image (context + added). Real code is contiguous in one of the two images, not
+    necessarily in the interleaved text, so groundedness checks the images.
     """
+    keep = {"both": "+- ", "before": "- ", "after": "+ "}[side]
     out: list[str] = []
     in_hunk = False
     for line in hunk_text.splitlines():
@@ -100,10 +104,16 @@ def hunk_code_text(hunk_text: str) -> str:
         if line.startswith("\\"):  # "\ No newline at end of file"
             continue
         if line[:1] in ("+", "-", " "):
-            out.append(line[1:])
+            if line[0] in keep:
+                out.append(line[1:])
         elif line == "":
             out.append("")  # some servers strip the trailing space from blank context lines
     return "\n".join(out)
+
+
+def hunk_images(hunk_text: str) -> tuple[str, str]:
+    """(before, after) code images of a file's hunks."""
+    return hunk_code_text(hunk_text, "before"), hunk_code_text(hunk_text, "after")
 
 
 def totals(files: list[FileStat]) -> dict[str, int]:
