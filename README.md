@@ -125,6 +125,13 @@ can gate CI on every prompt and model change, and it is aimed at exactly what a 
 pressure to produce findings. The verifier rejection rate is the secondary signal: judged rather
 than deterministic, so it is reported, not gated on.
 
+Groundedness is the gate, not the headline. Across the three runs it was checked on four findings
+(1/1, 2/2, 1/1), which has no statistical power; four passes show the check runs, not that the
+model is reliable. The more informative quality number from these runs is the funnel itself: on
+#18056 three findings were drafted, the severity bar suppressed one nit, the verifier rejected one
+of the two it saw (a 50% rejection rate on what reached it), and one was emitted. That is the
+pipeline doing work, and it is where a larger sample would first show a change.
+
 ### Predicted versus actual
 
 Predictions were written before any live run (timestamped in the build log).
@@ -160,6 +167,13 @@ What the actuals say, run on 2026-11-07 (`runs/pr-*.md`, sidecars alongside):
   predicted failure mode, the policy handled it as designed, and it is why cross-file context
   is the first item under two more days.
 - **Groundedness was 100% on every final run**, after one real bug in the check itself (below).
+  Four findings is too few to call that a result; see the note under Metrics.
+- **The MEDIUM tier never fired.** #20426 (2 files) and #19798 (4 files) both routed SMALL and
+  #18056 went LARGE, so the per-file fan-out band is covered by unit tests and `--plan-only` but
+  by no live run. That is a gap in the evidence. The tier exists because between 6 and 15 files
+  a whole-diff call starts to lose per-file attention while per-file calls are still cheap; the
+  thresholds were not moved to make a pinned PR land there, because that is fitting to the test
+  set.
 - **Run-to-run variance is large.** A first run of #18056, identical except for the triage
   summariser's input (see the AI-use log), drafted 7 findings and emitted 4; the committed run
   drafted 3 and emitted 1. Both are kept: `runs/pr-18056.run1.md`. The models always think and
@@ -167,6 +181,40 @@ What the actuals say, run on 2026-11-07 (`runs/pr-*.md`, sidecars alongside):
   this means the golden set must be run several times per change and judged on distributions;
   for a reviewer it means the deterministic numbers (groundedness, skips) are the ones to trust
   run to run, and the finding count is not.
+
+### Against the human reviews
+
+The brief chose closed PRs with real review history so the output could be compared. I did that
+by hand after the runs, reading the review comments on both PRs through the GitHub API. The
+agent's findings were not shown to it and it had no access to the review threads.
+
+- **#18056, `django/db/models/aggregates.py:189-190`.** The agent's only emitted finding is on
+  the `Count` rewrite for composite primary keys. Simon Charette commented on the same two lines
+  in the real review, about a different thing: the rewrite counts one column and is only correct
+  because every column of a composite primary key is `NOT NULL`. The agent argued instead that
+  returning a fresh unresolved `Count` drops the resolved clone's state and any extra kwargs. The
+  merged code kept `return Count(cols[0], filter=result.filter)`, so the maintainers either did
+  not consider the agent's point or did not share it, and nobody has yet checked whether it is
+  right. The overlap here is in location, not in substance.
+- **#19798, `tests/foreign_object/tests.py:797-800`.** The agent said both exclude tests use a
+  value that satisfies the constraint, so they pass whether or not exclusion works, and suggested
+  skipping a `ForeignObject` whose `from_fields` intersect `exclude`. In the real review Jacob
+  Walls asked for a test showing exclusion "still avoids validating a failing constraint" and
+  Charette asked that excluding a composite member skip validation of the virtual field. The PR
+  merged with the satisfying value and a follow-up ticket for the exclusion case. This overlap is
+  in substance.
+- **#19798, `django/db/models/base.py:1375-1377`.** The agent said `getattr(self, from_field)` can
+  return a related instance rather than a column value and suggested `field.local_related_fields`
+  and their `attname`s. Walls had flagged the same code on an earlier revision as a performance
+  regression and pointed at `field.local_related_fields` as the fix. Charette's comment about
+  `GenericForeignKey` and `ManyToManyField` returning managers, which looks similar, was about a
+  different branch of the same function. The overlap is in the suggested fix more than in the
+  stated problem.
+
+The agent did not find these because it understood composite primary keys or foreign objects. It
+found them because the ranking put those files in front of a strong model with a narrow brief and
+a verifier behind it. Three overlaps with human reviewers on three PRs is encouraging and is not
+a measurement; the golden set in DESIGN.md is how it would become one.
 
 The honest claim this submission makes is narrow: the agent produces grounded, scoped review
 output at a known cost and latency, and it tells you what it did not look at. It does not claim
@@ -236,6 +284,16 @@ AI got wrong was kept as it happened; the entries below are from that log, not r
   as two consecutive lines of code. The summariser read exactly what it was given. Fixed by
   passing the hunks as a diff, with a test. The reviewer, which sees the real diff, had not
   taken the bait either time.
+- A second chat-drafted prompt, for the cleanup pass, opened with a git-hygiene section built on
+  the claim that the worktree copy and the assignment docx were tracked. Neither was; `git
+  ls-files` showed it in one command. The section shrank to two ignore lines. The same prompt's
+  comparison against the human reviews was checked comment by comment against the GitHub API
+  before it was written up: two of its three overlaps held as stated and the third was weaker
+  than claimed, which is how the section above is worded.
+- The committed runs predate a cosmetic change to how skipped files are labelled (position
+  within kind rather than a global rank beside the score). The ranking logic and the scores are
+  unchanged; the reports were not regenerated so that the committed outputs stay the ones the
+  numbers above describe.
 
 ## What two more days would buy
 
