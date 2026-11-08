@@ -1,0 +1,130 @@
+{
+  "label": "pr-18056",
+  "source": "https://github.com/django/django/pull/18056",
+  "models": {
+    "review": "claude-opus-5-5",
+    "triage": "claude-haiku-5-5"
+  },
+  "latency_seconds": {
+    "total": 36.41,
+    "by_phase": {
+      "fetch": 0.001,
+      "triage": 2.168,
+      "route": 0.0,
+      "review": 25.336,
+      "verify": 5.634,
+      "groundedness": 0.015,
+      "synth": 3.257
+    }
+  },
+  "tokens": {
+    "in": 41613,
+    "out": 10798,
+    "by_phase": {
+      "triage": {
+        "claude-haiku-5-5": {
+          "in": 5137,
+          "out": 299,
+          "calls": 1
+        }
+      },
+      "review": {
+        "claude-opus-5-5": {
+          "in": 30865,
+          "out": 9359,
+          "calls": 12
+        }
+      },
+      "verify": {
+        "claude-opus-5-5": {
+          "in": 4895,
+          "out": 787,
+          "calls": 2
+        }
+      },
+      "synth": {
+        "claude-opus-5-5": {
+          "in": 716,
+          "out": 353,
+          "calls": 1
+        }
+      }
+    }
+  },
+  "cost": {
+    "usd_total": 0.356547,
+    "usd_by_model": {
+      "claude-haiku-5-5": 0.000663,
+      "claude-opus-5-5": 0.355884
+    },
+    "prices_recorded": "2026-11-07",
+    "unpriced_models": []
+  },
+  "calls": 16,
+  "retries": 0,
+  "files_total": 43,
+  "files_ranked": 43,
+  "files_reviewed": 12,
+  "files_skipped": 31,
+  "units": 12,
+  "tier": "LARGE",
+  "findings_drafted": 3,
+  "findings_malformed": 0,
+  "findings_suppressed": 1,
+  "findings_verified": 2,
+  "findings_rejected": 1,
+  "findings_ungrounded": 0,
+  "findings_emitted": 1,
+  "findings_unverified_emitted": 0,
+  "groundedness": {
+    "grounded": 1,
+    "total": 1,
+    "rate": 1.0
+  },
+  "verifier_rejection_rate": 0.5,
+  "verifier_failed_files": [],
+  "review_failed_units": 0,
+  "findings": [
+    {
+      "file": "django/db/models/aggregates.py",
+      "line_start": 189,
+      "line_end": 190,
+      "snippet": "            cols = expr.get_cols()\n            return Count(cols[0], filter=result.filter)",
+      "severity": "should-fix",
+      "category": "correctness",
+      "finding": "A brand-new, unresolved `Count` is returned instead of the resolved `result`. Anything `resolve_expression()` set on the clone (e.g. `is_summary`/summarize state) is dropped, as are extra kwargs passed to the original aggregate (`output_field`, other `**extra`).",
+      "suggestion": "Mutate the resolved clone instead of constructing a new one, e.g. `source_expressions = result.get_source_expressions(); source_expressions[0] = expr.get_cols()[0]; result.set_source_expressions(source_expressions); return result`.",
+      "verdict": "supported",
+      "verdict_reason": "The diff visibly returns a freshly constructed `Count(cols[0], filter=result.filter)` instead of the resolved `result`, so that object is never resolved and only `filter` is carried over, dropping any other kwargs or state set on the clone."
+    }
+  ],
+  "findings_dropped": [
+    {
+      "file": "django/db/models/fields/related.py",
+      "line_start": 638,
+      "line_end": 641,
+      "snippet": "                or (\n                    frozenset(field.name for field in remote_opts.pk_fields)\n                    == foreign_fields\n                )",
+      "severity": "nit",
+      "category": "correctness",
+      "finding": "The composite-PK uniqueness check uses equality, but the neighbouring `unique_together` and `UniqueConstraint` checks use subset (`<=`). A `ForeignObject` whose `to_fields` include all PK fields plus extra columns is still unique, yet it would be reported as fields.E310.",
+      "suggestion": "Use `frozenset(field.name for field in remote_opts.pk_fields) <= foreign_fields` to match the other uniqueness checks.",
+      "dropped": "suppressed",
+      "verdict": "",
+      "verdict_reason": ""
+    },
+    {
+      "file": "django/db/models/sql/compiler.py",
+      "line_start": 2136,
+      "line_end": 2137,
+      "snippet": "                pks = [row if is_composite_pk else row[0] for row in rows]\n                idents.extend(pks)",
+      "severity": "should-fix",
+      "category": "correctness",
+      "finding": "For composite PKs the whole raw row is used as the pk identity. Any extra columns selected for `related_ids_index` (parent link ids) end up in the tuple passed to `pk__in`, so the filter would compare more values than the PK has. Similarly, `r[index]` for related ids does not account for the composite PK expanding to several columns.",
+      "suggestion": "Slice only the PK columns, e.g. `n = len(meta.pk_fields)` and `row[:n]`. Compute related id indexes using the expanded column count, or reject or assert the MTI path for composite PKs. Add a test covering an update that requires pre-selection (`update_can_self_select=False`) on a composite-PK model.",
+      "dropped": "verifier-rejected",
+      "verdict": "uncertain",
+      "verdict_reason": "The diff does show the whole row being used as the identity when `is_composite_pk` is true, but whether `related_ids_index` can add extra columns for composite-PK models depends on how the query fields are built outside the visible hunks."
+    }
+  ],
+  "notes": []
+}

@@ -1,0 +1,129 @@
+{
+  "label": "pr-19798",
+  "source": "https://github.com/django/django/pull/19798",
+  "models": {
+    "review": "claude-opus-5-5",
+    "triage": "claude-haiku-5-5"
+  },
+  "latency_seconds": {
+    "total": 35.075,
+    "by_phase": {
+      "fetch": 0.0,
+      "triage": 1.546,
+      "route": 0.0,
+      "review": 21.455,
+      "verify": 5.869,
+      "groundedness": 0.001,
+      "synth": 6.204
+    }
+  },
+  "tokens": {
+    "in": 8982,
+    "out": 4048,
+    "by_phase": {
+      "triage": {
+        "claude-haiku-5-5": {
+          "in": 711,
+          "out": 208,
+          "calls": 1
+        }
+      },
+      "review": {
+        "claude-opus-5-5": {
+          "in": 3788,
+          "out": 2290,
+          "calls": 1
+        }
+      },
+      "verify": {
+        "claude-opus-5-5": {
+          "in": 3462,
+          "out": 881,
+          "calls": 2
+        }
+      },
+      "synth": {
+        "claude-opus-5-5": {
+          "in": 1021,
+          "out": 669,
+          "calls": 1
+        }
+      }
+    }
+  },
+  "cost": {
+    "usd_total": 0.110059,
+    "usd_by_model": {
+      "claude-haiku-5-5": 0.000175,
+      "claude-opus-5-5": 0.109884
+    },
+    "prices_recorded": "2026-11-07",
+    "unpriced_models": []
+  },
+  "calls": 5,
+  "retries": 0,
+  "files_total": 4,
+  "files_ranked": 4,
+  "files_reviewed": 4,
+  "files_skipped": 0,
+  "units": 1,
+  "tier": "SMALL",
+  "findings_drafted": 3,
+  "findings_malformed": 0,
+  "findings_suppressed": 0,
+  "findings_verified": 3,
+  "findings_rejected": 1,
+  "findings_ungrounded": 0,
+  "findings_emitted": 2,
+  "findings_unverified_emitted": 0,
+  "groundedness": {
+    "grounded": 2,
+    "total": 2,
+    "rate": 1.0
+  },
+  "verifier_rejection_rate": 0.333,
+  "verifier_failed_files": [],
+  "review_failed_units": 0,
+  "findings": [
+    {
+      "file": "django/db/models/base.py",
+      "line_start": 1375,
+      "line_end": 1377,
+      "snippet": "                value = tuple(\n                    getattr(self, from_field) for from_field in field.from_fields\n                )",
+      "severity": "should-fix",
+      "category": "correctness",
+      "finding": "Values are read with `getattr(self, <from_field name>)`. If a from_field is itself a relation, e.g. a ForeignKey, this returns a related model instance rather than the raw column value. That can trigger a DB query or raise RelatedObjectDoesNotExist. The names are also not resolved the way ForeignObject resolves them (e.g. 'self').",
+      "suggestion": "Use the resolved local fields and their attnames instead: `tuple(getattr(self, f.attname) for f in field.local_related_fields)`.",
+      "verdict": "supported",
+      "verdict_reason": "The diff reads values with `getattr(self, from_field)` on the raw `from_fields` names, which for a relation name returns the related instance rather than the column value, and does no resolution of special names like 'self'."
+    },
+    {
+      "file": "tests/foreign_object/tests.py",
+      "line_start": 797,
+      "line_end": 800,
+      "snippet": "    @skipUnlessDBFeature(\"supports_table_check_constraints\")\n    def test_validate_constraints_excluding_foreign_object_member(self):\n        customer_tab = CustomerTab(customer_id=150)\n        customer_tab.validate_constraints(exclude={\"customer_id\"})",
+      "severity": "should-fix",
+      "category": "tests",
+      "finding": "Both exclude tests use customer_id=150, which satisfies the constraint anyway, so they pass whether or not exclusion has any effect. Also, excluding `customer_id` still validates the constraint through `customer`, because the foreign-object value is built from the excluded field. That behaviour is untested and arguably wrong.",
+      "suggestion": "Use a violating value such as 1500 in the exclude tests and assert the intended outcome. Consider skipping a ForeignObject whose from_fields intersect `exclude`.",
+      "verdict": "supported",
+      "verdict_reason": "Both exclude tests use customer_id=150 with no assertion, and the diff shows 500 passing and 1500 failing validation, so 150 almost certainly satisfies the constraint and the tests pass whether or not exclusion has any effect; the further claim about validation going through `customer` depends on implementation code outside the diff."
+    }
+  ],
+  "findings_dropped": [
+    {
+      "file": "django/db/models/base.py",
+      "line_start": 1378,
+      "line_end": 1379,
+      "snippet": "                if len(value) == 1:\n                    value = value[0]",
+      "severity": "should-fix",
+      "category": "tests",
+      "finding": "Only the single-column ForeignObject path is exercised. The multi-column tuple path, wrapped as `Value(tuple, field)`, has no test, and it is unclear it produces a valid comparison in `Q.check()`.",
+      "suggestion": "Add a test with a multi-column ForeignObject, like the existing Contact.customer, referenced in a constraint, or explicitly restrict the change to single-column relations.",
+      "dropped": "verifier-rejected",
+      "verdict": "uncertain",
+      "verdict_reason": "Whether the multi-column tuple path is tested, and whether it works in `Q.check()`, depends on test files and code outside this diff."
+    }
+  ],
+  "notes": []
+}

@@ -66,7 +66,8 @@ shift in emitted-per-PR at constant PR size means the severity bar moved.
 
 **A frozen golden set in CI** on every change that can move quality: prompt, model id, threshold,
 weight. It starts with the three pinned PRs and grows with every PR where a human disagreed with
-the agent. Deterministic checks *gate*: groundedness must not fall, each PR's tier must not change
+the agent, and it runs each PR several times: two runs of #18056 on the same code emitted four
+findings and then one, so a single run cannot gate anything judged. Deterministic checks *gate*: groundedness must not fall, each PR's tier must not change
 unexpectedly, the Not-reviewed section must list every skip. Judged checks *report*: rubric-scored
 precision and recall against the human labels. Gating on a judged metric invites the judge to
 drift with the thing it judges.

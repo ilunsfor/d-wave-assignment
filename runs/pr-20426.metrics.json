@@ -1,0 +1,103 @@
+{
+  "label": "pr-20426",
+  "source": "https://github.com/django/django/pull/20426",
+  "models": {
+    "review": "claude-opus-5-5",
+    "triage": "claude-haiku-5-5"
+  },
+  "latency_seconds": {
+    "total": 20.021,
+    "by_phase": {
+      "fetch": 0.0,
+      "triage": 1.516,
+      "route": 0.0,
+      "review": 10.236,
+      "verify": 5.729,
+      "groundedness": 0.0,
+      "synth": 2.54
+    }
+  },
+  "tokens": {
+    "in": 4177,
+    "out": 1895,
+    "by_phase": {
+      "triage": {
+        "claude-haiku-5-5": {
+          "in": 380,
+          "out": 182,
+          "calls": 1
+        }
+      },
+      "review": {
+        "claude-opus-5-5": {
+          "in": 2087,
+          "out": 965,
+          "calls": 1
+        }
+      },
+      "verify": {
+        "claude-opus-5-5": {
+          "in": 1041,
+          "out": 482,
+          "calls": 1
+        }
+      },
+      "synth": {
+        "claude-opus-5-5": {
+          "in": 669,
+          "out": 266,
+          "calls": 1
+        }
+      }
+    }
+  },
+  "cost": {
+    "usd_total": 0.049577,
+    "usd_by_model": {
+      "claude-haiku-5-5": 0.000129,
+      "claude-opus-5-5": 0.049448
+    },
+    "prices_recorded": "2026-11-07",
+    "unpriced_models": []
+  },
+  "calls": 4,
+  "retries": 0,
+  "files_total": 2,
+  "files_ranked": 2,
+  "files_reviewed": 2,
+  "files_skipped": 0,
+  "units": 1,
+  "tier": "SMALL",
+  "findings_drafted": 1,
+  "findings_malformed": 0,
+  "findings_suppressed": 0,
+  "findings_verified": 1,
+  "findings_rejected": 0,
+  "findings_ungrounded": 0,
+  "findings_emitted": 1,
+  "findings_unverified_emitted": 0,
+  "groundedness": {
+    "grounded": 1,
+    "total": 1,
+    "rate": 1.0
+  },
+  "verifier_rejection_rate": 0.0,
+  "verifier_failed_files": [],
+  "review_failed_units": 0,
+  "findings": [
+    {
+      "file": "django/forms/forms.py",
+      "line_start": 290,
+      "line_end": 291,
+      "snippet": "                    \"The argument `field` must be `None` when the `error` \"\n                    \"argument is a dictionary.\"",
+      "severity": "should-fix",
+      "category": "correctness",
+      "finding": "This branch fires whenever `error` has an `error_dict`, including when the caller passes a `ValidationError` instance built from a dict, as the new test does. In that case the message says the argument \"is a dictionary\", which is inaccurate.",
+      "suggestion": "Reword the message to cover both cases, e.g. \"...when the `error` argument is a dictionary or a ValidationError with a dictionary of errors.\" Alternatively, keep the original wording.",
+      "verdict": "supported",
+      "verdict_reason": "The visible else-branch reads `error.error_dict`, so this branch handles a ValidationError carrying an error_dict rather than a raw dict, and the new message saying the argument \"is a dictionary\" is inaccurate when the caller passes such a ValidationError instance."
+    }
+  ],
+  "findings_dropped": [],
+  "notes": []
+}

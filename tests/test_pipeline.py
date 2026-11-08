@@ -117,6 +117,15 @@ class PipelineTests(unittest.TestCase):
             for prompt in client.prompts[phase]:
                 self.assertIn("untrusted data", prompt, phase)
 
+    def test_triage_summariser_sees_the_diff_markers(self):
+        # Without the +/- markers the removed line and its replacement read as consecutive code,
+        # and the first live runs' summariser duly reported a defect that did not exist.
+        _, _, client = self.run_with({"findings": []}, [])
+        prompt = client.prompts["triage"][0]
+        self.assertIn('-                    "argument contains errors for multiple fields."', prompt)
+        self.assertIn('+                    "argument is a dictionary."', prompt)
+        self.assertIn("@@", prompt)
+
     def test_metrics_report_is_json_serialisable(self):
         _, ledger, _ = self.run_with({"findings": [finding(REAL)]}, ["supported"])
         r = json.loads(json.dumps(ledger.report()))

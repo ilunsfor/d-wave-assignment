@@ -137,7 +137,36 @@ Predictions were written before any live run (timestamped in the build log).
 | Predicted cost (re-based to claude-opus-5-5 after the provider swap, still before any run) | < $0.03 | $0.03–0.10 | $0.40–1.20 |
 | Predicted emitted findings | 0 | 0–2 | 3–8 |
 | Predicted groundedness | 100% or n/a | 100% | 80–95% |
-| **Actual** | *pending live run* | *pending live run* | *pending live run* |
+| **Actual wall clock** | 20 s | 35 s | 36 s |
+| **Actual cost** | $0.050 | $0.110 | $0.357 |
+| **Actual emitted findings** | 1 | 2 | 1 |
+| **Actual groundedness** | 1/1 | 2/2 | 1/1 |
+| Actual drafted / verifier-rejected | 1 / 0 | 3 / 1 | 3 / 1 (plus 1 nit suppressed) |
+| Actual files skipped | 0 | 0 | 31 of 43, all listed |
+
+What the actuals say, run on 2026-11-07 (`runs/pr-*.md`, sidecars alongside):
+
+- **Cost and latency** came in under the re-based predictions. The large PR's twelve review
+  calls ran four at a time and the review phase took 25 s; the whole run was faster than the
+  70-line PR's single call plus synthesis would suggest, because fan-out is wall-clock cheap.
+- **#20426 emitted one finding where I predicted zero.** The reviewer argues the new wording
+  ("the `error` argument is a dictionary") misdescribes the branch, which also fires for a
+  `ValidationError` built from a dict, and the added test uses exactly that. The verifier
+  supported it; it is grounded; the PR merged with that wording. A maintainer might post it or
+  might not. It is the kind of should-fix the severity bar lets through, and I would rather show
+  it than tune the bar after seeing the answer.
+- **Every verifier rejection was for the same reason**: the claim depends on code outside the
+  diff (whether a path is tested elsewhere, what a method not in the hunk does). That is the
+  predicted failure mode, the policy handled it as designed, and it is why cross-file context
+  is the first item under two more days.
+- **Groundedness was 100% on every final run**, after one real bug in the check itself (below).
+- **Run-to-run variance is large.** A first run of #18056, identical except for the triage
+  summariser's input (see the AI-use log), drafted 7 findings and emitted 4; the committed run
+  drafted 3 and emitted 1. Both are kept: `runs/pr-18056.run1.md`. The models always think and
+  accept no sampling controls, so a single run is a sample, not the answer. For the platform
+  this means the golden set must be run several times per change and judged on distributions;
+  for a reviewer it means the deterministic numbers (groundedness, skips) are the ones to trust
+  run to run, and the finding count is not.
 
 The honest claim this submission makes is narrow: the agent produces grounded, scoped review
 output at a known cost and latency, and it tells you what it did not look at. It does not claim
@@ -201,10 +230,12 @@ AI got wrong was kept as it happened; the entries below are from that log, not r
   code". Fixed to check the before- and after-images; three tests added for the case. The
   sidecar now lists every dropped finding with the stage that dropped it, which is how this was
   diagnosed in one run instead of guessing.
-- On the same run the triage model (Haiku) asserted that two string fragments were concatenated
-  without a space, misreading a removed line and an added line as consecutive. The reviewer was
-  handed that summary and did not take the bait. Noted as the kind of error a cheap summariser
-  makes on diffs, and as a reason the summary is labelled as the triage model's, not the agent's.
+- On the same run the triage summary claimed two string fragments were concatenated without a
+  space. I first logged that as the cheap model misreading the diff. Wrong: my code stripped the
+  `+`/`-` markers before handing it the hunks, so the removed line and its replacement arrived
+  as two consecutive lines of code. The summariser read exactly what it was given. Fixed by
+  passing the hunks as a diff, with a test. The reviewer, which sees the real diff, had not
+  taken the bait either time.
 
 ## What two more days would buy
 

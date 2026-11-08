@@ -1,0 +1,179 @@
+{
+  "label": "pr-18056",
+  "source": "https://github.com/django/django/pull/18056",
+  "models": {
+    "review": "claude-opus-5-5",
+    "triage": "claude-haiku-5-5"
+  },
+  "latency_seconds": {
+    "total": 53.033,
+    "by_phase": {
+      "fetch": 0.001,
+      "triage": 1.972,
+      "route": 0.0,
+      "review": 33.843,
+      "verify": 8.62,
+      "groundedness": 0.013,
+      "synth": 8.585
+    }
+  },
+  "tokens": {
+    "in": 46241,
+    "out": 15715,
+    "by_phase": {
+      "triage": {
+        "claude-haiku-5-5": {
+          "in": 4866,
+          "out": 249,
+          "calls": 1
+        }
+      },
+      "review": {
+        "claude-opus-5-5": {
+          "in": 30265,
+          "out": 12467,
+          "calls": 12
+        }
+      },
+      "verify": {
+        "claude-opus-5-5": {
+          "in": 9541,
+          "out": 1831,
+          "calls": 4
+        }
+      },
+      "synth": {
+        "claude-opus-5-5": {
+          "in": 1569,
+          "out": 1168,
+          "calls": 1
+        }
+      }
+    }
+  },
+  "cost": {
+    "usd_total": 0.475431,
+    "usd_by_model": {
+      "claude-haiku-5-5": 0.000611,
+      "claude-opus-5-5": 0.47482
+    },
+    "prices_recorded": "2026-11-07",
+    "unpriced_models": []
+  },
+  "calls": 18,
+  "retries": 0,
+  "files_total": 43,
+  "files_ranked": 43,
+  "files_reviewed": 12,
+  "files_skipped": 31,
+  "units": 12,
+  "tier": "LARGE",
+  "findings_drafted": 7,
+  "findings_malformed": 0,
+  "findings_suppressed": 2,
+  "findings_verified": 5,
+  "findings_rejected": 1,
+  "findings_ungrounded": 0,
+  "findings_emitted": 4,
+  "findings_unverified_emitted": 0,
+  "groundedness": {
+    "grounded": 4,
+    "total": 4,
+    "rate": 1.0
+  },
+  "verifier_rejection_rate": 0.2,
+  "verifier_failed_files": [],
+  "review_failed_units": 0,
+  "findings": [
+    {
+      "file": "django/db/models/aggregates.py",
+      "line_start": 189,
+      "line_end": 190,
+      "snippet": "            cols = expr.get_cols()\n            return Count(cols[0], filter=result.filter)",
+      "severity": "should-fix",
+      "category": "correctness",
+      "finding": "The replacement `Count` is built from scratch with only `filter`, so anything else on the original is silently dropped. That includes an explicit `output_field` and other `**extra` kwargs. The new instance is also never passed through `resolve_expression`.",
+      "suggestion": "Copy the resolved instance instead, e.g. `c = result.copy(); c.set_source_expressions([cols[0], result.filter]); return c`. Alternatively, forward the original `extra`/`output_field` and resolve the new object.",
+      "verdict": "supported",
+      "verdict_reason": "The diff shows `Count(cols[0], filter=result.filter)` constructed fresh, passing no `output_field` or other extra kwargs and returning it directly without calling `resolve_expression` on it."
+    },
+    {
+      "file": "django/db/models/fields/composite.py",
+      "line_start": 55,
+      "line_end": 58,
+      "snippet": "        if kwargs.get(\"default\", NOT_PROVIDED) is not NOT_PROVIDED:\n            raise ValueError(\"CompositePrimaryKey cannot have a default.\")\n        if kwargs.get(\"db_default\", NOT_PROVIDED) is not NOT_PROVIDED:\n            raise ValueError(\"CompositePrimaryKey cannot have a database default.\")",
+      "severity": "should-fix",
+      "category": "api-design",
+      "finding": "`db_column` is accepted but silently ignored, because `get_attname_column` always returns a `None` column. Other meaningless options (`default`, `db_default`) are rejected with an error.",
+      "suggestion": "Add `if kwargs.get(\"db_column\", None) is not None: raise ValueError(\"CompositePrimaryKey cannot have a db_column.\")`, with a test.",
+      "verdict": "supported",
+      "verdict_reason": "`__init__` validates `default` and `db_default` but never checks `db_column`, and `get_attname_column` always returns `None` for the column, so a passed `db_column` is silently ignored."
+    },
+    {
+      "file": "django/db/models/fields/composite.py",
+      "line_start": 105,
+      "line_end": 106,
+      "snippet": "        return ColPairs(alias, self.fields, self.fields, output_field)",
+      "severity": "should-fix",
+      "category": "correctness",
+      "finding": "When `alias` differs from the model's table (joins, subqueries, aliased tables) and `output_field` is None, `ColPairs` is built with `output_field=None`. The cached path uses `self` instead. `Field.get_col` defaults `output_field` to `self` in this case.",
+      "suggestion": "Add `if output_field is None: output_field = self` before constructing `ColPairs`, mirroring `Field.get_col`.",
+      "verdict": "supported",
+      "verdict_reason": "`get_col` returns `ColPairs(alias, self.fields, self.fields, output_field)` without defaulting `output_field` to `self`, so a non-default alias with `output_field=None` yields `None`, unlike `cached_col`, which passes `self`."
+    },
+    {
+      "file": "django/db/models/fields/tuple_lookups.py",
+      "line_start": 311,
+      "line_end": 313,
+      "snippet": "        if isinstance(lhs, ColPairs):\n            rhs = rhs.clone()\n            rhs.set_values([source.name for source in lhs.sources])\n            lhs = Tuple(lhs)",
+      "severity": "should-fix",
+      "category": "correctness",
+      "finding": "When the LHS is a `ColPairs`, the subquery's select is overwritten with the LHS model's field names. This ignores whatever the user selected on the RHS queryset. If the RHS is a different model, or selects differently named columns (e.g. `pk__in=Other.objects.values('x', 'y')`), the subquery either raises `FieldError` or silently compares the wrong columns.",
+      "suggestion": "Only rewrite the RHS select when it is a single `ColPairs` (the `.values('pk')` case). In that case, expand it using the RHS's own `ColPairs` targets rather than the LHS source names. Leave explicitly selected multi-column subqueries untouched. Add tests covering a cross-model subquery.",
+      "verdict": "supported",
+      "verdict_reason": "The diff visibly clones the RHS query and calls `set_values` with the LHS sources' field names, replacing whatever the RHS selected, so a differently-modelled or differently-named RHS selection would be overridden as claimed."
+    }
+  ],
+  "findings_dropped": [
+    {
+      "file": "django/db/models/fields/related.py",
+      "line_start": 638,
+      "line_end": 641,
+      "snippet": "                or (\n                    frozenset(field.name for field in remote_opts.pk_fields)\n                    == foreign_fields\n                )",
+      "severity": "nit",
+      "category": "correctness",
+      "finding": "The primary-key check uses equality, while the neighbouring `unique_together` and `total_unique_constraints` checks use subset (`<=`). A ForeignObject whose `to_fields` are a superset of the composite PK columns would still be flagged as non-unique (fields.E310).",
+      "suggestion": "Use `frozenset(field.name for field in remote_opts.pk_fields) <= foreign_fields` so it matches the other uniqueness checks.",
+      "dropped": "suppressed",
+      "verdict": "",
+      "verdict_reason": ""
+    },
+    {
+      "file": "django/db/models/sql/compiler.py",
+      "line_start": 1581,
+      "line_end": 1584,
+      "snippet": "        if self.has_composite_fields(fields):\n            rows = self.composite_fields_to_tuples(rows, fields)\n        if tuple_expected:\n            rows = map(tuple, rows)",
+      "severity": "nit",
+      "category": "performance",
+      "finding": "`map(tuple, rows)` now runs on every `values_list()` row even when there are no converters and no composite fields. In that case cursor rows are already tuples, so this adds per-row overhead on a hot path.",
+      "suggestion": "Only apply `map(tuple, rows)` when converters were applied or composite fields were collapsed, e.g. track a flag set in those two branches.",
+      "dropped": "suppressed",
+      "verdict": "",
+      "verdict_reason": ""
+    },
+    {
+      "file": "django/db/models/sql/compiler.py",
+      "line_start": 2136,
+      "line_end": 2137,
+      "snippet": "                pks = [row if is_composite_pk else row[0] for row in rows]\n                idents.extend(pks)",
+      "severity": "should-fix",
+      "category": "correctness",
+      "finding": "For composite PKs the whole raw row is used as the pk value. `execute_sql(MULTI)` returns raw cursor rows that have not been passed through `composite_fields_to_tuples`. If `fields` contains anything beyond the pk, such as related-update ids appended via `related_ids_index`, those columns leak into the pk tuple. The `len(fields)` index used for related ids also no longer matches column positions, because the pk spans several columns.",
+      "suggestion": "Slice the row to the number of pk columns, e.g. `row[:len(meta.pk_fields)]` converted to a tuple. Compute the related-id indexes from flattened column positions, or raise explicitly if related updates are combined with a composite pk.",
+      "dropped": "verifier-rejected",
+      "verdict": "uncertain",
+      "verdict_reason": "The diff does show the whole raw row being used as the pk for composite PKs, but how `fields` and `related_ids_index` (the `len(fields)` indexes) are built lies outside the visible hunks, so whether extra columns leak or indexes misalign cannot be confirmed."
+    }
+  ],
+  "notes": []
+}
