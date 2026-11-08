@@ -46,10 +46,23 @@ to a branch, and its output is a PR a human merges.
 makes claims a clean-context verifier will not support; and groundedness, since invented problems
 come with invented citations. A PR tripping two of three goes to a human before its review is shown.
 
-`[Ian: your Bedrock Guardrails work belongs here: which of the four control types (denied topics,
-sensitive-information filters, word filters, content filters) you ran in production and what each
-caught. The AWS merge-request review tool is the model for exposing this agent over MCP: a
-read-only tool taking a PR reference and returning the review document plus metrics.]`
+**What I have run before, and what it taught this design.** The nearest precedent is a
+merge-request review agent at AWS, invoked by a coding agent over MCP and reading merge requests
+through the GitLab API. It had write access and posted its own comments. Its characteristic
+failure was a stale finding, a comment on code that had already moved: cheap to fix by hand or
+with a second agent, but in front of the team before anyone caught it. Separately, I have
+configured Bedrock Guardrails on two production systems at a national laboratory, with denied
+topics, sensitive-information filters, custom blocklists and content filters applied at model
+invocation. That was declarative policy configuration; the engineering in it was deciding what to
+deny and confirming the policy sat on the invocation path.
+
+Both shaped the choices above. This agent writes a document and posts nothing, so a stale finding
+here is a stale document rather than a comment in front of the team, and staleness is handled by
+re-running on each push against the diff as it then stands; the groundedness check guarantees
+only that a finding cites the code as it was when reviewed, not that the code is still there.
+Exposed over MCP it stays the same shape: one read-only tool that takes a PR reference and
+returns the review document and its metrics sidecar, with posting left to the caller under the
+blast-radius rule above.
 
 ## Observability and silent degradation
 
@@ -126,7 +139,6 @@ weights, and how a convention change reaches every agent on the next run.
 version and prompt hash behind any review (both are in its sidecar); rollback (prompts are files,
 models are environment variables, so rollback is a revert and redeploy gated by the golden set);
 and cost controls (per-key cap, per-PR call bound, daily spend alert at half budget).
-`[Ian: your infrastructure-as-code and runbook practice from systems you have handed off.]`
 
 **Cost at scale.** The large pinned PR cost $0.36 with the strong model on every ranked file and
 every verification; the small ones cost $0.05 and $0.11. A repository merging fifty PRs a day
