@@ -61,6 +61,23 @@ class RouteTests(unittest.TestCase):
         # Highest-scored (largest, since all same kind) files are the ones reviewed.
         self.assertIn(f"django/s{n - 1}.py", plan.reviewed_paths)
 
+    def test_skip_reason_positions_are_within_kind_and_monotonic(self):
+        # Kind dominates the rank, so a global position beside a score reads as an inversion
+        # (a test file "ranked 18" with score 55 under a source file "ranked 13" with 50.3).
+        # The reason reports the position within the kind, where score order actually holds.
+        n = config.MEDIUM_MAX_FILES + 5
+        files = [stat(f"django/s{i}.py", added=i + 1) for i in range(n)]
+        files += [stat("tests/t_big.py", added=400), stat("tests/t_small.py", added=1)]
+        plan = route.route(files)
+        reasons = {s.path: s.reason for s in plan.skipped}
+        self.assertIn("(test 1 of 2, score", reasons["tests/t_big.py"])
+        self.assertIn("(test 2 of 2, score", reasons["tests/t_small.py"])
+        self.assertNotIn("ranked", reasons["tests/t_big.py"])
+        source_skips = [s for s in plan.skipped if s.path.startswith("django/")]
+        self.assertIn(f"(source {config.LARGE_TOP_N + 1} of {n}, score", source_skips[0].reason)
+        scores = [float(s.reason.rsplit("score ", 1)[1].rstrip(")")) for s in source_skips]
+        self.assertEqual(scores, sorted(scores, reverse=True))
+
     def test_oversized_unit_is_skipped_not_truncated(self):
         files = [stat(f"django/m{i}.py") for i in range(config.SMALL_MAX_FILES + 1)]
         files[0] = stat("django/big.py", chars=config.UNIT_MAX_CHARS + 1)

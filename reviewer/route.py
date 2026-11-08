@@ -67,12 +67,18 @@ def route(files: list[FileStat]) -> Plan:
 def _per_file_units(ranked: list[FileStat], limit: int | None) -> tuple[list[Unit], list[Skipped]]:
     units: list[Unit] = []
     skipped: list[Skipped] = []
-    for i, f in enumerate(ranked, start=1):
+    # Rank is kind first, then score within the kind, so a global position next to a score reads
+    # as an inversion ("ranked 18, score 55" below "ranked 13, score 50.3"). Report the position
+    # within the kind instead; that is the order the score actually produced.
+    per_kind = {k: sum(1 for f in ranked if f.kind == k) for k in config.KIND_WEIGHT}
+    seen = {k: 0 for k in config.KIND_WEIGHT}
+    for f in ranked:
+        seen[f.kind] += 1
         if f.chars > config.UNIT_MAX_CHARS:
             skipped.append(Skipped(f.path, f"exceeds per-unit cap ({f.chars:,} chars > {config.UNIT_MAX_CHARS:,}); not truncated"))
             continue
         if limit is not None and len(units) >= limit:
-            skipped.append(Skipped(f.path, f"outside top-{limit} budget (ranked {i} of {len(ranked)}, {f.kind}, score {f.score:g})"))
+            skipped.append(Skipped(f.path, f"outside top-{limit} budget ({f.kind} {seen[f.kind]} of {per_kind[f.kind]}, score {f.score:g})"))
             continue
         units.append(Unit(f.path, [f.path], f.hunk_text))
     return units, skipped

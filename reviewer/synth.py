@@ -120,7 +120,8 @@ def _not_reviewed(skipped: list[Skipped]) -> str:
         "## Not reviewed",
         "",
         f"{len(skipped)} file{'s were' if len(skipped) != 1 else ' was'} not reviewed. "
-        "The findings above say nothing about them.",
+        "The findings above say nothing about them. Files are ranked by kind (source, then test, "
+        "docs, config) and by score within a kind; positions below are within the kind.",
         "",
     ]
     lines += [f"- `{s.path}` — {s.reason}" for s in skipped]
