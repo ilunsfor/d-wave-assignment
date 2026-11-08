@@ -128,6 +128,19 @@ models are environment variables, so rollback is a revert and redeploy gated by 
 and cost controls (per-key cap, per-PR call bound, daily spend alert at half budget).
 `[Ian: your infrastructure-as-code and runbook practice from systems you have handed off.]`
 
+**Cost at scale.** The large pinned PR cost $0.36 with the strong model on every ranked file and
+every verification; the small ones cost $0.05 and $0.11. A repository merging fifty PRs a day
+with one in five routed LARGE runs about $7 a day, and every push re-reviews the whole PR until
+per-file caching lands, so a busy monorepo at ten times that volume is a few thousand dollars a
+month before caching and less after it, by however much of a PR a push leaves untouched. The lever is already in the sidecar's
+per-model accounting: keep the strong model for the top-ranked source files and send the tail
+(the remaining source, then tests and docs) to the cheap model at a fortieth of the price, which
+takes the large tier from $0.36 toward $0.15. The trade is named rather than assumed: the cheap
+model reviewing tests is the cheap model reviewing exactly the files where the agent's best
+finding on #19798 lived, a test that passed whether or not the behaviour worked. So the split is
+a configuration change gated by the golden set, with per-model groundedness and rejection rates
+reported separately so the quality cost of the saving is visible before it is paid.
+
 **Measuring success, and what would kill it.** Adoption is the share of PRs where a human reacted
 to a finding (resolved, replied, changed the cited line), not the share reviewed, which the bot
 controls. Outcome is PR-open-to-merge time against a matched sample, and post-merge fixes touching
