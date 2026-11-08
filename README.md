@@ -20,7 +20,8 @@ Python 3.11+, two dependencies.
 pip install -r requirements.txt
 ```
 
-Put `OPENAI_API_KEY=...` in the environment or in a gitignored `.env` at the repo root, then:
+Put `ANTHROPIC_API_KEY=...` in the environment or in the gitignored `.env` at the repo root
+(the loader resolves it relative to the package, not the working directory), then:
 
 ```bash
 python -m reviewer https://github.com/django/django/pull/19798
@@ -64,16 +65,22 @@ fetch -> triage -> route -+-> SMALL   whole diff, one call      -+
 | Phase | What | Model |
 |---|---|---|
 | fetch | PR URL or local diff; pins cached as raw bytes | none |
-| triage | parse with `unidiff`, per-file stats, classify source/test/docs/config, score | none, except one cheap call for a two-sentence PR-intent summary |
+| triage | parse with `unidiff`, per-file stats, classify source/test/docs/config, score | none, except one claude-haiku-5-5 call for a two-sentence PR-intent summary |
 | route | tier from file count and changed lines; build units; record skips with reasons | none |
-| review | structured findings per unit, bounded fan-out, main thread is the only writer | gpt-4.1 |
+| review | structured findings per unit, bounded fan-out, main thread is the only writer | claude-opus-5-5, effort high |
 | suppress | drop nits before anything pays for them | none |
-| verify | per file: findings' claims plus the file's hunks, **not** the reviewer's rationale; supported / unsupported / uncertain | gpt-4.1 |
+| verify | per file: findings' claims plus the file's hunks, **not** the reviewer's rationale; supported / unsupported / uncertain | claude-opus-5-5, effort high |
 | ground | exact substring check of each snippet against the cited file's hunks | none |
-| synth | one call composes the review; header, Not-reviewed and footer rendered by code | gpt-4.1 |
+| synth | one call composes the review; header, Not-reviewed and footer rendered by code | claude-opus-5-5, effort medium |
 
 Every constant lives in `reviewer/config.py`. Diff content enters every prompt through one
 function that fences and labels it as untrusted data, because a diff is attacker-controlled text.
+
+The models always think before answering and reject sampling parameters, so determinism is not
+available and the per-phase lever is reasoning effort rather than temperature. Structured output
+is enforced by the API against the same JSON schema the parser validates. A refusal or a
+truncated response is a visible call failure, not a silent fallback to another model: the metrics
+attribute cost per model, and a quiet substitution would mis-price the run.
 
 ### The decisions, and why
 
@@ -105,7 +112,7 @@ dropped before the verifier so they cost nothing. Verifier `unsupported` finding
 
 Each run writes a JSON sidecar with wall-clock latency total and per phase; tokens in and out per
 phase and per model; USD cost from a dated price table in `config.py` (rates recorded 2026-11-07
-from third-party trackers citing OpenAI's pricing page; moderate confidence, flagged there);
+directly from the Claude API pricing page);
 files total / ranked / reviewed / skipped; the finding funnel drafted / malformed / suppressed /
 verifier-rejected / ungrounded / emitted; groundedness; and the verifier rejection rate.
 
@@ -124,8 +131,9 @@ Predictions were written before any live run (timestamped in the build log).
 | | #20426 | #19798 | #18056 |
 |---|---|---|---|
 | Tier | SMALL | SMALL | LARGE, 12 of 43 files |
-| Predicted wall clock | 10–25 s | 15–40 s | 60–150 s |
-| Predicted cost | < $0.01 | $0.01–0.03 | $0.15–0.40 |
+| Predicted wall clock (original; re-based: add 50% for thinking) | 10–25 s | 15–40 s | 60–150 s |
+| Predicted cost (gpt-4.1 pricing, original) | < $0.01 | $0.01–0.03 | $0.15–0.40 |
+| Predicted cost (re-based to claude-opus-5-5 after the provider swap, still before any run) | < $0.03 | $0.03–0.10 | $0.40–1.20 |
 | Predicted emitted findings | 0 | 0–2 | 3–8 |
 | Predicted groundedness | 100% or n/a | 100% | 80–95% |
 | **Actual** | *pending live run* | *pending live run* | *pending live run* |
@@ -163,7 +171,7 @@ reasoning and accepted by me, rather than defaults the model invented. A running
 AI got wrong was kept as it happened; the entries below are from that log, not reconstructed.
 
 - The chat-drafted prompt said #18056 "blows the context window". Measured, it is about 35k
-  tokens and fits gpt-4.1's window several times over. Caught by fetching and counting the diffs
+  tokens and fits a 1M-token window several times over. Caught by fetching and counting the diffs
   before writing code; the routing thesis was re-grounded on review quality, recoverability,
   verifiability and cost instead.
 - The chat-drafted prompt said #19798 includes a release note. The diff has none. Caught by
@@ -181,6 +189,10 @@ AI got wrong was kept as it happened; the entries below are from that log, not r
 - It wrote an end-to-end test whose verdict list assumed findings kept their submission order;
   the review pass sorts them for determinism. Test bug, not code bug, but it took one failed run
   to see.
+- The chat-drafted prompt chose OpenAI models, and Claude Code carried that choice through
+  seven stages without questioning it. The assignment says only "use your own LLM API key". When
+  I asked, the provider was swapped to the Claude API before any live run: one module, the price
+  table, and this document changed; nothing in review, verify, synth or the tests did.
 
 ## What two more days would buy
 

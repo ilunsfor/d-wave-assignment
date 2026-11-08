@@ -1,2 +1,2 @@
-openai>=3,<4
+anthropic>=1,<2
 unidiff>=0.7

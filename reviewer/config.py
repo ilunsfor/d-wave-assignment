@@ -9,17 +9,24 @@ import os
 # --- models ------------------------------------------------------------------------------
 # Strong model: review, verify, synthesize. Cheap model: the one judgement call in triage
 # (a two-sentence PR-intent summary). Both overridable so a model change is a deploy, not a diff.
-REVIEW_MODEL = os.environ.get("REVIEW_MODEL", "gpt-4.1")
-TRIAGE_MODEL = os.environ.get("TRIAGE_MODEL", "gpt-4.1-nano")
+REVIEW_MODEL = os.environ.get("REVIEW_MODEL", "claude-opus-5-5")
+TRIAGE_MODEL = os.environ.get("TRIAGE_MODEL", "claude-haiku-5-5")
+
+# Reasoning effort per phase. Thinking is always on for these models and sampling parameters
+# (temperature etc.) are rejected, so effort is the lever. Review and verify carry the quality;
+# synthesis is composition; triage is a two-sentence summary.
+EFFORT = {"triage": "low", "review": "high", "verify": "high", "synth": "medium"}
+EFFORT_DEFAULT = "high"
 
 # --- price table, USD per 1M tokens --------------------------------------------------------
-# Recorded 2026-11-07 from third-party trackers citing developers.openai.com/api/docs/pricing
-# (Oct 2026). Confidence: moderate -- the official page was not fetched directly. Verify before
-# quoting a cost figure externally. Unknown models cost 0 and are flagged in the metrics.
+# Recorded 2026-11-07 directly from platform.claude.com/docs/en/about-claude/pricing.
+# Haiku 5.5 is priced by prompt length; the rate below is the under-100K-token tier, which the
+# triage prompt (capped at TRIAGE_SUMMARY_MAX_CHARS) never exceeds. Unknown models cost 0 and
+# are flagged in the metrics.
 PRICES_RECORDED = "2026-11-07"
 PRICES = {
-    "gpt-4.1": {"input": 2.00, "output": 8.00},
-    "gpt-4.1-nano": {"input": 0.10, "output": 0.40},
+    "claude-opus-5-5": {"input": 4.00, "output": 20.00},
+    "claude-haiku-5-5": {"input": 0.10, "output": 0.50},
 }
 
 # --- size routing --------------------------------------------------------------------------
@@ -74,8 +81,9 @@ EMIT_UNCERTAIN_SEVERITIES = ("blocking",)
 MAX_WORKERS = 4  # bounded fan-out for review and verify; synthesis is always one call
 CALL_TIMEOUT_S = 120  # per model call, so the latency budget is real
 MAX_RETRIES = 1  # one retry on transient errors (timeout, connection, 429, 5xx). No more.
-TEMPERATURE = 0
-MAX_OUTPUT_TOKENS = 4000
+# Per-call output cap. Thinking tokens count against it on these models, so it is well above
+# what any one review unit's findings need; a call that hits it is a visible failure.
+MAX_OUTPUT_TOKENS = 16_000
 # Characters of diff handed to the cheap model for the PR-intent summary.
 TRIAGE_SUMMARY_MAX_CHARS = 12_000
 
